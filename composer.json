@@ -1,0 +1,24 @@
+{
+    "name": "Labs64/NetLicensing-PrestaShop",
+    "description": "NetLicensing Connector for PrestaShop",
+    "homepage": "http://netlicensing.io",
+    "license": "Apache-2.0",
+    "authors": [
+        {
+            "name": "Labs64 NetLicensing",
+            "email": "netlicensing@labs64.com",
+            "homepage": "http://netlicensing.io"
+        }
+    ],
+    "support": {
+        "email": "netlicensing@labs64.com",
+        "issues": "https://github.com/Labs64/NetLicensingClient-php/issues",
+        "wiki": "https://www.labs64.de/confluence/display/NLICPUB",
+        "source": "https://github.com/Labs64/NetLicensingClient-php",
+        "docs": "https://www.labs64.de/confluence/display/NLICPUB"
+    },
+    "require": {
+        "php": ">=5.3.2",
+        "Labs64/NetLicensingClient-php":"dev-master"
+    }
+}
