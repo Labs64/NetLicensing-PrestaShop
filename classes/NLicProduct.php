@@ -14,7 +14,7 @@ class NLicProduct extends ObjectModel
     public $number;
 
     public static $definition = array(
-        'table' => NLicConnector::NLIC_TABLE_PRODUCT,
+        'table' => NLicConnector::TABLE_PRODUCT,
         'primary' => 'id_product',
         'multilang_shop' => true,
         'fields' => array(
@@ -28,18 +28,26 @@ class NLicProduct extends ObjectModel
     {
         if ($id_products && is_array($id_products)) {
             if (!$id_shop) $id_shop = Context::getContext()->shop->id;
-            return Db::getInstance()->delete(NLicConnector::NLIC_TABLE_PRODUCT, "number IN('" . implode("','", $id_products) . "') AND id_shop=" . $id_shop);
+            return Db::getInstance()->delete(NLicConnector::TABLE_PRODUCT, "number IN('" . implode("','", $id_products) . "') AND id_shop=" . $id_shop);
         }
 
         return false;
     }
 
-    public static function getAllProducts($id_shop = null)
+    public static function getProducts($ids_products = array(), $id_shop = null)
     {
         $products = array();
 
         if (!$id_shop) $id_shop = Context::getContext()->shop->id;
-        $sql = "SELECT * FROM " . _DB_PREFIX_ . NLicConnector::NLIC_TABLE_PRODUCT . " nlt WHERE nlt.id_shop=" . $id_shop;
+        $sql = "SELECT * FROM " . _DB_PREFIX_ . NLicConnector::TABLE_PRODUCT . " nlt WHERE nlt.id_shop=" . $id_shop;
+
+        if ($ids_products) {
+            if (is_array($ids_products)) {
+                $sql .= " AND nlt.id_product IN ('" . implode("','", $ids_products) . "')";
+            } else {
+                $sql .= " AND nlt.id_product = '" . $ids_products . "'";
+            }
+        }
 
         if ($results = Db::getInstance()->ExecuteS($sql)) {
             foreach ($results as $row) {

@@ -13,7 +13,7 @@ class NLicCategory extends ObjectModel
     public $number;
 
     public static $definition = array(
-        'table' => NLicConnector::NLIC_TABLE_CATEGORY,
+        'table' => NLicConnector::TABLE_CATEGORY,
         'primary' => 'id_category',
         'multilang_shop' => false,
         'fields' => array(
@@ -27,7 +27,7 @@ class NLicCategory extends ObjectModel
         $categories = array();
 
         if ($numbers) {
-            $sql = "SELECT * FROM " . _DB_PREFIX_ . NLicConnector::NLIC_TABLE_CATEGORY . " WHERE number IN('" . implode("','", $numbers) . "')";
+            $sql = "SELECT * FROM " . _DB_PREFIX_ . NLicConnector::TABLE_CATEGORY . " WHERE number IN('" . implode("','", $numbers) . "')";
 
             if ($results = Db::getInstance()->ExecuteS($sql)) {
                 foreach ($results as $row) {
