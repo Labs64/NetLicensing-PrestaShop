@@ -99,6 +99,7 @@ class NLicConnector extends Module
 
     public function hookActionOrderStatusPostUpdate($params)
     {
+        print_r('asdasd');
         if (!$this->active) return null;
         $id_order = $params['id_order'];
 
@@ -107,27 +108,27 @@ class NLicConnector extends Module
 
         $status = $params['newOrderStatus'];
 
-        $nlic_connect = new \NetLicensing\NetLicensingAPI();
-        $nlic_connect->setUserName($this->_getUsername());
-        $nlic_connect->setPassword($this->_getPassword());
+        $context = new \NetLicensing\Context();
+        $context->setUsername($this->_getUsername());
+        $context->setPassword($this->_getPassword());
 
         // if status not paid and nlic_order exist, deactivate license
         if (!$status->paid && $nlic_order->id) {
-            if ($nlic_order->deactivateLicenses($nlic_connect)) {
+            if ($nlic_order->deactivateLicenses($context)) {
                 $nlic_order->save();
             }
         }
 
         //if status paid and nlic order exist activate license
         if ($status->paid && $nlic_order->id) {
-            if ($nlic_order->activateLicenses($nlic_connect)) {
+            if ($nlic_order->activateLicenses($context)) {
                 $nlic_order->save();
             }
         }
 
         //if status paid and nlic_order not exist,create license
         if ($status->paid && !$nlic_order->id) {
-            if ($nlic_order->createLicenses($nlic_connect)) {
+            if ($nlic_order->createLicenses($context)) {
                 $nlic_order->save();
                 //send email
                 $this->_sendOrderLicensesEmail($nlic_order);
@@ -137,6 +138,8 @@ class NLicConnector extends Module
 
     public function hookDisplayAdminOrder($params)
     {
+
+
         $messages = '';
         $errors = '';
 
@@ -149,12 +152,12 @@ class NLicConnector extends Module
 
             if ($submit) {
 
-                $nlic_connect = new \NetLicensing\NetLicensingAPI();
-                $nlic_connect->setUserName($this->_getUsername());
-                $nlic_connect->setPassword($this->_getPassword());
+                $context = new \NetLicensing\Context();
+                $context->setUsername($this->_getUsername());
+                $context->setPassword($this->_getPassword());
 
                 if (Tools::getValue('submit_' . $this->name . '_order') == 'send_email') {
-                    if ($nlic_order->checkLicensesState($nlic_connect)) {
+                    if ($nlic_order->checkLicensesState($context)) {
                         $nlic_order->save();
                         //send email
                         if ($this->_sendOrderLicensesEmail($nlic_order)) {
@@ -165,7 +168,7 @@ class NLicConnector extends Module
                     }
                 }
                 if (Tools::getValue('submit_' . $this->name . '_order') == 'check_state') {
-                    if ($nlic_order->checkLicensesState($nlic_connect)) {
+                    if ($nlic_order->checkLicensesState($context)) {
                         $nlic_order->save();
                         $messages .= $this->displayConfirmation($this->l('Licenses status updated'));
                     } else {
@@ -216,7 +219,8 @@ class NLicConnector extends Module
 
     public function hookDisplayOrderConfirmation($params)
     {
-        $order = $params['objOrder'];
+        /** @var  $order Order*/
+        $order = isset($params['objOrder']) ? $params['objOrder'] : $params['order'];
 
         //check if order paid
         $order_state = new OrderState($order->getCurrentState());
@@ -263,12 +267,12 @@ class NLicConnector extends Module
 
                     if (!$errors) {
                         try {
-                            //check authorization
-                            $nlic_connect = new \NetLicensing\NetLicensingAPI();
-                            $nlic_connect->setUserName($username);
-                            $nlic_connect->setPassword($password);
 
-                            $license_templates = \NetLicensing\LicenseTemplateService::connect($nlic_connect)->getList();
+                            $context = new \NetLicensing\Context();
+                            $context->setUsername($username);
+                            $context->setPassword($password);
+
+                            \NetLicensing\LicenseTemplateService::getList($context);
 
                             //update settings
                             $this->_updateUsername($username);
@@ -299,12 +303,25 @@ class NLicConnector extends Module
 
             try {
                 //check authorization
-                $nlic_connect = new \NetLicensing\NetLicensingAPI();
-                $nlic_connect->setUserName($username);
-                $nlic_connect->setPassword($password);
+                $context = new \NetLicensing\Context();
+                $context->setUsername($username);
+                $context->setPassword($password);
 
-                $license_templates = \NetLicensing\LicenseTemplateService::connect($nlic_connect)->getList();
-                $product_modules = \NetLicensing\ProductModuleService::connect($nlic_connect)->getList();
+                $tmp_license_templates = \NetLicensing\LicenseTemplateService::getList($context);
+                $tmp_product_modules = \NetLicensing\ProductModuleService::getList($context);
+
+                $license_templates = [];
+                $product_modules = [];
+
+                foreach ($tmp_license_templates as $license_template) {
+                    /**@var $license_template \NetLicensing\LicenseTemplate */
+                    $license_templates[$license_template->getNumber()] = $license_template;
+                }
+
+                foreach ($tmp_product_modules as $product_module) {
+                    /**@var $product_module \NetLicensing\ProductModule */
+                    $product_modules[$product_module->getNumber()] = $product_module;
+                }
 
                 $currency_eur_id = Currency::getIdByIsoCode('EUR');
                 $currency = new Currency($currency_eur_id);
@@ -365,8 +382,8 @@ class NLicConnector extends Module
                     /** @var $license_template \NetLicensing\LicenseTemplate */
                     foreach ($sorted_products['import'] as $license_template) {
                         /** @var $product_module \NetLicensing\ProductModule */
-                        $product_module = $product_modules[$license_template->getProductModuleNumber()];
-                        $product_module_number = $product_module->getNumber(null);
+                        $product_module = $product_modules[$license_template->getProperty('productModuleNumber')];
+                        $product_module_number = $product_module->getNumber();
 
                         /** @var $nlic_category NLicCategory */
                         $nlic_category = !empty($categories[$product_module_number]) ? $categories[$product_module_number] : new NLicCategory();
@@ -528,12 +545,25 @@ class NLicConnector extends Module
 
         try {
             //check authorization
-            $nlic_connect = new \NetLicensing\NetLicensingAPI();
-            $nlic_connect->setUserName($username);
-            $nlic_connect->setPassword($password);
+            $context = new \NetLicensing\Context();
+            $context->setUsername($username);
+            $context->setPassword($password);
 
-            $license_templates = \NetLicensing\LicenseTemplateService::connect($nlic_connect)->getList();
-            $product_modules = \NetLicensing\ProductModuleService::connect($nlic_connect)->getList();
+            $tmp_license_templates = \NetLicensing\LicenseTemplateService::getList($context);
+            $tmp_product_modules = \NetLicensing\ProductModuleService::getList($context);
+
+            $license_templates = [];
+            $product_modules = [];
+
+            foreach ($tmp_license_templates as $license_template) {
+                /**@var $license_template \NetLicensing\LicenseTemplate */
+                $license_templates[$license_template->getNumber()] = $license_template;
+            }
+
+            foreach ($tmp_product_modules as $product_module) {
+                /**@var $product_module \NetLicensing\ProductModule */
+                $product_modules[$product_module->getNumber()] = $product_module;
+            }
 
             $currency_eur_id = Currency::getIdByIsoCode('EUR');
             $currency = new Currency($currency_eur_id);
@@ -704,16 +734,32 @@ class NLicConnector extends Module
         //check if license template are allowed
         $allowed_license_templates = array();
 
+        $tmp_license_templates = $license_templates;
+        $tmp_product_modules = $product_modules;
+
+        $license_templates = [];
+        $product_modules = [];
+
+        foreach ($tmp_license_templates as $license_template) {
+            /**@var $license_template \NetLicensing\LicenseTemplate */
+            $license_templates[$license_template->getNumber()] = $license_template;
+        }
+
+        foreach ($tmp_product_modules as $product_module) {
+            /**@var $product_module \NetLicensing\ProductModule */
+            $product_modules[$product_module->getNumber()] = $product_module;
+        }
+
         foreach ($license_templates as $license_template) {
             /** @var $license_template \NetLicensing\LicenseTemplate */
-            if (!$license_template->getHidden()) {
-                /** @var $product_module \NetLicensing\ProductModule */
-                $product_module = $product_modules[$license_template->getProductModuleNumber()];
+            if ($license_template->getHidden()) continue;
 
-                if (in_array($product_module->getLicensingModel(), self::$_allowed_license_models)) {
-                    $allowed_license_templates[$license_template->getNumber()] = $license_template;
-                }
-            }
+            /** @var $product_module \NetLicensing\ProductModule */
+            $product_module = $product_modules[$license_template->getProperty('productModuleNumber')];
+
+            if (!in_array($product_module->getLicensingModel(), self::$_allowed_license_models)) continue;
+
+            $allowed_license_templates[$license_template->getNumber()] = $license_template;
         }
 
         if ($allowed_license_templates) {

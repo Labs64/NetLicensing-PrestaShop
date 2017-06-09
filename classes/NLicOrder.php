@@ -49,11 +49,12 @@ class NLicOrder extends ObjectModel
         return $fields;
     }
 
-    public function getOrder(){
+    public function getOrder()
+    {
         return $this->_order;
     }
 
-    public function createLicenses(\NetLicensing\NetLicensingAPI $nlic_connect)
+    public function createLicenses(\NetLicensing\Context $context)
     {
         if (!empty($this->id)) return false;
         if (!$orderProducts = $this->_order->getProducts()) return false;
@@ -67,16 +68,29 @@ class NLicOrder extends ObjectModel
         if (!$nlic_products = NLicProduct::getProducts(array_keys($products))) return false;
 
         try {
-            $products_modules = \NetLicensing\ProductModuleService::connect($nlic_connect)->getList();
-            $license_templates = \NetLicensing\LicenseTemplateService::connect($nlic_connect)->getList();
+            $tmp_license_templates = \NetLicensing\LicenseTemplateService::getList($context);
+            $tmp_product_modules = \NetLicensing\ProductModuleService::getList($context);
+
+            $license_templates = [];
+            $product_modules = [];
+
+            foreach ($tmp_license_templates as $license_template) {
+                /**@var $license_template \NetLicensing\LicenseTemplate */
+                $license_templates[$license_template->getNumber()] = $license_template;
+            }
+
+            foreach ($tmp_product_modules as $product_module) {
+                /**@var $product_module \NetLicensing\ProductModule */
+                $product_modules[$product_module->getNumber()] = $product_module;
+            }
 
             foreach ($nlic_products as $nlic_product) {
                 $product = $products[$nlic_product->id_product];
                 $license_template = !empty($license_templates[$nlic_product->number]) ? $license_templates[$nlic_product->number] : new \NetLicensing\LicenseTemplate();
-                $product_module = (!empty($license_template->getProductModuleNumber()) && $products_modules[$license_template->getProductModuleNumber()]) ? $products_modules[$license_template->getProductModuleNumber()] : new \NetLicensing\ProductModule();
+                $product_module = (!empty($license_template->getProperty('productModuleNumber')) && $product_modules[$license_template->getProperty('productModuleNumber')]) ? $product_modules[$license_template->getProperty('productModuleNumber')] : new \NetLicensing\ProductModule();
 
                 //create licensee
-                $this->data[$nlic_product->id_product] = $this->_createLicense($nlic_connect, $product, $license_template, $product_module);
+                $this->data[$nlic_product->id_product] = $this->_createLicense($context, $product, $license_template, $product_module);
             }
         } catch (\NetLicensing\NetLicensingException $e) {
             Tools::dieOrLog(Tools::displayError(sprintf($e->getMessage() . ' Order ID: %d; Customer ID:%d; Shop ID:%d;', $this->_order->id, $this->_order->id_customer, $this->_order->id_shop)), true);
@@ -85,7 +99,7 @@ class NLicOrder extends ObjectModel
         return true;
     }
 
-    public function activateLicenses(\NetLicensing\NetLicensingAPI $nlic_connect)
+    public function activateLicenses(\NetLicensing\Context $context)
     {
         if (empty($this->data)) return false;
 
@@ -95,11 +109,11 @@ class NLicOrder extends ObjectModel
                     //deactivate license
                     foreach ($data['licenses'] as &$license_data) {
                         /** @var  $license \NetLicensing\License */
-                        $license = \NetLicensing\LicenseService::connect($nlic_connect)->get($license_data['number']);
+                        $license = \NetLicensing\LicenseService::get($context, $license_data['number']);
 
                         if (!$license->getActive()) {
                             $license->setActive(true);
-                            \NetLicensing\LicenseService::connect($nlic_connect)->update($license);
+                            $license = \NetLicensing\LicenseService::update($context, $license->getNumber(), null, $license);
                             $license_data['active'] = $license->getActive();
                         }
                     }
@@ -112,22 +126,22 @@ class NLicOrder extends ObjectModel
         return true;
     }
 
-    public function deactivateLicenses(\NetLicensing\NetLicensingAPI $nlic_connect)
+    public function deactivateLicenses(\NetLicensing\Context $context)
     {
 
         if (empty($this->data)) return false;
-       
+
         try {
             foreach ($this->data as &$data) {
                 if (empty($data['error'])) {
                     //deactivate license
                     foreach ($data['licenses'] as &$license_data) {
                         /** @var  $license \NetLicensing\License */
-                        $license = \NetLicensing\LicenseService::connect($nlic_connect)->get($license_data['number']);
+                        $license = \NetLicensing\LicenseService::get($context, $license_data['number']);
 
                         if ($license->getActive()) {
                             $license->setActive(false);
-                            \NetLicensing\LicenseService::connect($nlic_connect)->update($license);
+                            $license = \NetLicensing\LicenseService::update($context, $license->getNumber(), null, $license);
                             $license_data['active'] = $license->getActive();
                         }
                     }
@@ -140,7 +154,7 @@ class NLicOrder extends ObjectModel
         return true;
     }
 
-    public function checkLicensesState(\NetLicensing\NetLicensingAPI $nlic_connect)
+    public function checkLicensesState(\NetLicensing\Context $context)
     {
         if (empty($this->data)) return false;
 
@@ -150,7 +164,7 @@ class NLicOrder extends ObjectModel
                     //deactivate license
                     foreach ($data['licenses'] as &$license_data) {
                         /** @var  $license \NetLicensing\License */
-                        $license = \NetLicensing\LicenseService::connect($nlic_connect)->get($license_data['number']);
+                        $license = \NetLicensing\LicenseService::update($context, $license->getNumber(), null, $license);
                         $license_data['active'] = $license->getActive();
                     }
                 }
@@ -162,7 +176,7 @@ class NLicOrder extends ObjectModel
         return true;
     }
 
-    protected function _createLicense(\NetLicensing\NetLicensingAPI $nlic_connect, $product, \NetLicensing\LicenseTemplate $license_template, \NetLicensing\ProductModule $product_module)
+    protected function _createLicense(\NetLicensing\Context $context, $product, \NetLicensing\LicenseTemplate $license_template, \NetLicensing\ProductModule $product_module)
     {
         if (!$license_template->getNumber()) {
             $error = 'Unable to create the license, license template not found.';
@@ -216,11 +230,10 @@ class NLicOrder extends ObjectModel
 
         //create licensee
         $licensee = new \NetLicensing\Licensee();
-        $licensee->setProductNumber($product_module->getProductNumber());
-        $licensee->setProperty('name', !empty($customer->id) ? $customer->lastname . ' ' . $customer->firstname : 'ID Customer:' . $this->_order->id_customer);
+        $licensee->setName(!empty($customer->id) ? $customer->lastname . ' ' . $customer->firstname : 'ID Customer:' . $this->_order->id_customer);
         $licensee->setActive(true);
 
-        \NetLicensing\LicenseeService::connect($nlic_connect)->create($licensee);
+        $licensee = \NetLicensing\LicenseeService::create($context, $product_module->getProperty('productNumber'), $licensee);
 
         $quantity = !empty($product['product_quantity']) ? $product['product_quantity'] : $product['minimal_quantity'];
 
@@ -238,13 +251,10 @@ class NLicOrder extends ObjectModel
             $license = new \NetLicensing\License();
             $license->setActive(true);
             $license->setName($product_name);
-            $license->setLicenseeNumber($licensee->getNumber());
 
-            if ($license_template->getLicenseType() == 'TIMEVOLUME') $license->setProperty('startDate', 'now');
+            if ($license_template->getLicenseType() == 'TIMEVOLUME') $license->setStartDate('now');
 
-            $license->setLicenseTemplateNumber($license_template->getNumber());
-
-            $tmp_licenses[] =\NetLicensing\LicenseService::connect($nlic_connect)->create($license);
+            $license = \NetLicensing\LicenseService::create($context, $licensee->getNumber(), $license_template->getNumber(), null, $license);
 
             $license_data['licenses'][$license->getNumber()] = array(
                 'active' => $license->getActive(),
