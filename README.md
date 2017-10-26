@@ -1,4 +1,6 @@
-# NetLicensing-PrestaShop
+<a href="https://netlicensing.io"><img src="https://netlicensing.io/img/netlicensing-stage-twitter.jpg" alt="Innovative License Management Solution"></a>
+
+# [Labs64 NetLicensing](https://netlicensing.io) PrestaShop
 NetLicensing Connector for PrestaShop
 
 ## Installation
